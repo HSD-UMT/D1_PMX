@@ -1,0 +1,5 @@
+OTA_updateStarted	KEYWORD1
+OTA_updateFinished	KEYWORD1
+OTA_updateProcess	KEYWORD1
+OTA_updateError	KEYWORD1
+OTAinit	KEYWORD1

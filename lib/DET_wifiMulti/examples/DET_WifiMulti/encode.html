@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <title>Encode</title>
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
+	<style type="text/css">
+		html,body{
+			font:18px Helvetica, Arial, sans-serif;
+		}
+		input{
+			width:50%;
+		}
+	</style>
+  </head>
+  <body>
+		<h1>Encode</h1>
+		<p style="font-size:80%;">WARNING<br/>this is not encryption! Just obfuscation!<br/>But it should be enough to disencourage script kiddies ;)</p>
+		
+		<br/>
+	
+		<p>Original</p>
+		<input type="text" id="in" autofocus></input>
+
+		<p>Encoded</p>
+		<input type="text" id="out"></input>
+		
+		<script>
+			document.getElementById("in").addEventListener("input", function() {
+				var instr;
+				var outstr;
+				instr=document.getElementById("in").value;
+				outstr=btoa(instr);
+				var encoded="";
+				for(t=0;t<outstr.length;t++){
+					x=outstr.charCodeAt(t);
+					if(t%2==0){
+						x++;
+					}else{
+						x--;
+					}
+					encoded+=String.fromCharCode(x);
+				}
+				document.getElementById("out").value=encoded;
+			});
+		</script>
+
+  </body>
+</html>

@@ -1,0 +1,4 @@
+wprint	KEYWORD1
+wprintln	KEYWORD1
+wprintLoop	KEYWORD1
+wprintInit	KEYWORD1

@@ -1,0 +1,10 @@
+dinit	KEYWORD1
+dprint	KEYWORD1
+dprintln	KEYWORD1
+dprintf	KEYWORD1
+dprintfln	KEYWORD1
+dprintV	KEYWORD1
+dprintlnV	KEYWORD1
+ddelay	KEYWORD1
+dwait	KEYWORD1
+

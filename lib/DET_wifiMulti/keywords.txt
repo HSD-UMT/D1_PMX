@@ -1,0 +1,2 @@
+WifiDecoder	KEYWORD1
+wifiMultiInit	KEYWORD1

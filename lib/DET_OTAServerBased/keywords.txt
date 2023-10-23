@@ -1,0 +1,7 @@
+OTAServerBased_wifiMultiConnect	KEYWORD1
+OTAServerBased_disconnectWifi	KEYWORD1
+OTAServerBased_updateStarted	KEYWORD1
+OTAServerBased_updateFinished	KEYWORD1
+OTAServerBased_updateProcess	KEYWORD1
+OTAServerBased_updateError	KEYWORD1
+RunServerOTA	KEYWORD1
