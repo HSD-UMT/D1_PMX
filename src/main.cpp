@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#define FW_VERSION 111
+#define FW_VERSION 999
 
 #define gewichteteMittelBufMaxLen 64
 
@@ -20,7 +20,7 @@ bool adc23DiffMode=false;
 int16_t adc0offset=0,adc1offset=0,adc2offset=0,adc3offset=0; // offsets for the ADCs
 
 String dataDumpComment=""; // Put in Streetname or stuff
-uint64_t nrfPipe=1; // NRF24l01 pipe - more user-friendly name
+//uint64_t nrfPipe=1; // NRF24l01 pipe - more user-friendly name
 bool dbgDisplay=false; // debug stuff
 bool adddDebugDataToSDDump=false;  // more debug stuff
 uint16_t sendThisAsXtra=1; // for the display -- see following list for values... default sending ADC0 (for the lazy ppl)
@@ -119,11 +119,16 @@ I2C_BUTTON I2Cbuts(I2CAdressDisplayButtons);
 
 // NRF24L01
 #include <RF24.h>
+#include <RF24Network.h>
+#include <RF24Mesh.h>
 
+#define nodeID 1 /* 0 is the master */
 #define NRF_CE 1 /* TX -- can be clamped to 3v3! */ 
 #define NRF_CSN 3 /* RX */
 
-RF24 nrf(NRF_CE,NRF_CSN); /* CE, CSN */
+RF24 radio(NRF_CE,NRF_CSN); /* CE, CSN */
+RF24Network network(radio);
+RF24Mesh mesh(radio,network);
 
 struct nrfDataStruct{ // gets updated by loopGetData
   uint8_t change;
@@ -133,6 +138,15 @@ struct nrfDataStruct{ // gets updated by loopGetData
   float altitude;
   float hum;
   float xtra;
+  float co2;
+  uint16_t year;
+  uint8_t month;
+  uint8_t day;
+  uint8_t hour;
+  uint8_t minute;
+  uint8_t second;
+  double lat;
+  double lng;
 }nrfData;
 
 
@@ -1919,7 +1933,7 @@ void GPSLifeSignDebug(){
 
 void updateGPSSystemStrings(time_t sysTime){ // runs every second from loop_everySecond
 
-	gpsDate=withLeadingZero(String(day(sysTime)));
+  gpsDate=withLeadingZero(String(day(sysTime)));
   gpsDate+=".";
   gpsDate+=withLeadingZero(String(month(sysTime)));
   gpsDate+=".";
@@ -2776,7 +2790,7 @@ void SD_IniFileDataProcessing(String key,String val){ // this is a bit tedious
   if(key=="channel"){
     int x=val.toInt();
     if(x>=1 && x<=5){ // channels go from 1 to 5
-      nrfPipe=x;
+      //nodeID == x;
       dprint("[SD_IniFileDataProcessing] setting nrfPipe to ");
       dprintln(String(x));
     }else{
@@ -3108,23 +3122,36 @@ void NRFInit(){
   pinMode(NRF_CSN,FUNCTION_3);  // RX
   pinMode(NRF_CE,FUNCTION_3);  // TX
 
-  if(!nrf.begin()){
+  mesh.setNodeID(nodeID);
+
+  if(!radio.begin()){
     dprintln("failed - no NRF Module found");
     return;
   }
+  
 
   dprintln("Module found - initializing");
 
   NRF24L01Attached=HIGH;
   
-  nrf.openWritingPipe(nrfPipe);
-  nrf.setChannel(108);
-  nrf.setDataRate(RF24_250KBPS);
-  nrf.setAutoAck(false);
-  nrf.setPALevel(RF24_PA_MAX);
+  //nrf.openWritingPipe(nrfPipe);
+  //nrf.setChannel(108);
+  //nrf.setDataRate(RF24_250KBPS);
+  //nrf.setAutoAck(false);
+  radio.setPALevel(RF24_PA_MAX);
+  if (!mesh.begin(MESH_DEFAULT_CHANNEL, RF24_250KBPS)) {
+    if (radio.isChipConnected()) {
+      do {
+        // mesh.renewAddress() will return MESH_DEFAULT_ADDRESS on failure to connect
+        dprintln("[NRFInit] Could not connect to network. Connecting to mesh...");
+      }while (mesh.renewAddress() == MESH_DEFAULT_ADDRESS);
+    } else {
+      dprintln("[NRFInit] Radio hardware not responding.");
+    }
+  }
 
-  dprint("[NRFInit] nrfPipe: ");
-  dprintln(uint64ToString(nrfPipe));
+  dprint("[NRFInit] nodeID: ");
+  dprintln(uint64ToString(nodeID));
 
   digitalWrite(NRF_CSN,HIGH);
   
@@ -3230,6 +3257,17 @@ void NRF24L01UpdateDataStructure(){ // called from loop_ReadData - so this runs 
   }
 
   nrf_toggleBit=!nrf_toggleBit;
+
+  //updated struct by marcel
+  nrfData.co2 = scdx0_co2;
+  nrfData.year = gps.date.year();
+  nrfData.month = gps.date.month();
+  nrfData.day = gps.date.day();
+  nrfData.hour = gps.time.hour();
+  nrfData.minute = gps.time.minute();
+  nrfData.second = gps.time.second();
+  nrfData.lat = gps.location.lat();
+  nrfData.lng = gps.location.lng();
 	
 }
 
@@ -3240,12 +3278,29 @@ void NRFsendData(){ // called from loop_runAlways - this runs a lot
 
   static unsigned long nrfLastTime=0;
 
-  if((unsigned long)(millis()-nrfLastTime)>10){ // run only every 10ms!
+  if((unsigned long)(millis()-nrfLastTime)>500){ // run only every 10ms!
   
     digitalWrite(AlphasenseCSPin,HIGH);
     digitalWrite(sdChipSelectPin,HIGH);
+    mesh.update();
+    //nrf.write(&nrfData,sizeof(nrfData)); // transmits the whole struct
+    //new bigger struct by marcel
+    if (!mesh.write(&nrfData, 'A', sizeof(nrfData))) {
+      //If a write fails, check connectivity to the mesh network
+      if (!mesh.checkConnection()) {
+        //refresh the network address
+        if (mesh.renewAddress() == MESH_DEFAULT_ADDRESS) {
+          //If address renewal fails, reconfigure the radio and restart the mesh
+          //This allows recovery from most if not all radio errors
+          mesh.begin(MESH_DEFAULT_CHANNEL, RF24_250KBPS);
+        }
+      } else {
+        dprintln("[NRFsendData] Send fail, Test OK");
+      }
+    } //else {
+      //dprintln("[NRFsendData] Send OK");
+    //}
 
-    nrf.write(&nrfData,sizeof(nrfData)); // transmits the whole struct
   
     digitalWrite(NRF_CSN,HIGH);
 
@@ -3644,11 +3699,12 @@ void calcSystemDataFields(uint8_t divider){ // does all the math before writing 
 }
 
 void loop_runAlways(){
+  mesh.update();
 	SyncGPSAndSystemtime(10e3);
 	dnsServer.processNextRequest();
   server.handleClient();
   i2CButtonsService();
-	NRFsendData();
+  NRFsendData();
   GPSFeedTheEncoder();
   GPSPlausibilityCheck();
   yield();
